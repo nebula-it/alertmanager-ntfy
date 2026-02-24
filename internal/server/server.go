@@ -286,7 +286,7 @@ func (s *Server) updateNotification(logger *zap.Logger, alert *alertmanager.Aler
 
 			// Execute URL template
 			var urlBuf bytes.Buffer
-			urlTmpl, err := template.New("url").Parse(actionConfig.URL)
+			urlTmpl, err := template.New("url").Option("missingkey=zero").Parse(actionConfig.URL)
 			if err != nil {
 				logger.Warn("Invalid URL template, skipping action",
 					zap.String("action", actionConfig.Label),
