@@ -258,22 +258,23 @@ func (s *Server) updateNotification(logger *zap.Logger, alert *alertmanager.Aler
 	// Add actions if configured
 	if len(s.cfg.Ntfy.Notification.Templates.Actions) > 0 {
 		var validActions []ntfyAction
-
+		alertMap := alert.Map()
 		for _, actionConfig := range s.cfg.Ntfy.Notification.Templates.Actions {
 			// Check condition if present
 			if actionConfig.Condition != nil {
-				alertMap := alert.Map()
 				match, err := actionConfig.Condition.Evaluable.EvalBool(context.Background(), alertMap)
+				// Log detailed action info
+				logger.Debug("Action condition evaluation details",
+					zap.String("action", actionConfig.Label),
+					zap.String("condition", actionConfig.Condition.Text),
+					zap.Any("match", match),
+					zap.Any("alert_map", alertMap),
+					zap.Error(err))
 				if err != nil {
-					// Log both warning and detailed debug info
 					logger.Warn("Action condition evaluation failed, skipping action",
 						zap.String("action", actionConfig.Label),
-						zap.Error(err))
-
-					logger.Debug("Action condition evaluation details",
-						zap.String("action", actionConfig.Label),
 						zap.String("condition", actionConfig.Condition.Text),
-						zap.Any("alert_map", alertMap))
+						zap.Error(err))
 					continue // Skip this action but continue processing others
 				}
 				if !match {
@@ -286,7 +287,7 @@ func (s *Server) updateNotification(logger *zap.Logger, alert *alertmanager.Aler
 
 			// Execute URL template
 			var urlBuf bytes.Buffer
-			urlTmpl, err := template.New("url").Parse(actionConfig.URL)
+			urlTmpl, err := template.New("url").Option("missingkey=zero").Parse(actionConfig.URL)
 			if err != nil {
 				logger.Warn("Invalid URL template, skipping action",
 					zap.String("action", actionConfig.Label),
@@ -294,7 +295,7 @@ func (s *Server) updateNotification(logger *zap.Logger, alert *alertmanager.Aler
 				continue // Skip this action but continue processing others
 			}
 
-			if err := urlTmpl.Execute(&urlBuf, alert); err != nil {
+			if err := urlTmpl.Execute(&urlBuf, alertMap); err != nil {
 				logger.Warn("Failed to render URL template, skipping action",
 					zap.String("action", actionConfig.Label),
 					zap.Error(err))
